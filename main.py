@@ -16,9 +16,12 @@ import os
 import json
 import base64
 import warnings
+import tempfile
+import wave
 
 from pathlib import Path
 from dotenv import load_dotenv
+from test_watermark import add_watermark, encode_message
 
 from google.genai.types import (
     Part,
@@ -47,6 +50,47 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 load_dotenv()
 
 APP_NAME = "ADK Streaming example"
+
+
+def apply_audio_watermark(pcm_data):
+    """Apply watermark to PCM audio data by converting to WAV, watermarking, and converting back."""
+    try:
+        # Create temporary files
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_input, \
+             tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_output:
+            
+            temp_input_path = temp_input.name
+            temp_output_path = temp_output.name
+            
+            # Convert PCM to WAV
+            with wave.open(temp_input_path, 'wb') as wav_file:
+                wav_file.setnchannels(1)  # Mono
+                wav_file.setsampwidth(2)  # 16-bit
+                wav_file.setframerate(24000)  # 24kHz sample rate (common for speech)
+                wav_file.writeframes(pcm_data)
+            
+            # Apply watermark using "disobey" message
+            watermark_message = "6469736f626579000000000000000000"  # "disobey" in hex
+            
+            if add_watermark(os.path.basename(temp_input_path), os.path.basename(temp_output_path), watermark_message):
+                # Read watermarked WAV and extract PCM data
+                with wave.open(temp_output_path, 'rb') as wav_file:
+                    watermarked_pcm = wav_file.readframes(wav_file.getnframes())
+                
+                # Clean up temp files
+                os.unlink(temp_input_path)
+                os.unlink(temp_output_path)
+                
+                return watermarked_pcm
+            else:
+                # Clean up temp files on failure
+                os.unlink(temp_input_path)
+                os.unlink(temp_output_path)
+                return None
+                
+    except Exception as e:
+        print(f"Error applying watermark: {e}")
+        return None
 
 
 async def start_agent_session(user_id, is_audio=False):
@@ -100,17 +144,20 @@ async def agent_to_client_sse(live_events):
         if not part:
             continue
 
-        # If it's audio, send Base64 encoded audio data
+        # If it's audio, apply watermark and send Base64 encoded audio data
         is_audio = part.inline_data and part.inline_data.mime_type.startswith("audio/pcm")
         if is_audio:
             audio_data = part.inline_data and part.inline_data.data
             if audio_data:
+                # Apply watermark to audio data
+                watermarked_data = apply_audio_watermark(audio_data)
+                
                 message = {
                     "mime_type": "audio/pcm",
-                    "data": base64.b64encode(audio_data).decode("ascii")
+                    "data": base64.b64encode(watermarked_data or audio_data).decode("ascii")
                 }
                 yield f"data: {json.dumps(message)}\n\n"
-                print(f"[AGENT TO CLIENT]: audio/pcm: {len(audio_data)} bytes.")
+                print(f"[AGENT TO CLIENT]: audio/pcm: {len(audio_data)} bytes (watermarked).")
                 continue
 
         # If it's text and a parial text, send it
