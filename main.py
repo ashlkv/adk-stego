@@ -154,7 +154,7 @@ async def agent_to_client_sse(live_events):
                     wav_file.setframerate(24000)
                     wav_file.writeframes(watermarked_data)
                 detected = get_watermark(temp_verify_path)
-                print(f"watermark read: {detected}")
+                print(f"Watermark verified: {detected}")
                 os.unlink(temp_verify_path)
                 
                 # Split watermarked audio into chunks and send
@@ -359,7 +359,7 @@ async def send_message_endpoint(user_id: int, request: Request):
                             if detected_watermark:
                                 from watermark import decode_message
                                 decoded_message = decode_message(detected_watermark)
-                                print(f"Found watermark: {detected_watermark} - '{decoded_message}'")
+                                print(f"Watermark detected: {detected_watermark} - '{decoded_message}'")
                             else:
                                 print("No watermark found in user speech")
                         except Exception as e:
