@@ -10,17 +10,22 @@ cd audiowmark
 docker build -t audiowmark .
 ```
 
-2. Install blackhole:
+2. Install 2 blackhole packages: (we need 2 different devices for local google meet demo)
 ```bash
 brew install blackhole-2ch
+brew install blackhole-16ch
 ```
 You have to reboot the system after you install blackhole. After the reboot, make sure docker desktop is running.
 
 3. Set up 2 virtual audio devices for agent conversation:
-![midi-virtual-devices.png](./docs/midi-virtual-devices.png)
+4. ![Application > Utilities > Audio MIDI Setup](./docs/midi-virtual-devices.png)
 Name them `AB` and `BA`. Both should have BlackHole 2ch and Speakers.
 Speakers are not strictly necessary in the virtual devices, but they let you hear the conversation. 
 AB is for piping Agent A output to Agent B input, BA is vice versa.
+
+TODO: Speakers don't seem to work here.
+
+Add two more aggregate devices with just Blackhole 16ch: CD and DC. These are for google meet demo. 
 
 ## Launch
 

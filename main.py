@@ -316,13 +316,13 @@ async def send_message_endpoint(user_id: int, request: Request):
     if mime_type == "text/plain":
         content = Content(role="user", parts=[Part.from_text(text=data)])
         live_request_queue.send_content(content=content)
-        print(f"[CLIENT TO AGENT]: {data}")
+        #print(f"[CLIENT TO AGENT]: {data}")
     elif mime_type == "audio/pcm":
         decoded_data = base64.b64decode(data)
         
         # Always send audio directly to LLM (streaming as usual)
         live_request_queue.send_realtime(Blob(data=decoded_data, mime_type=mime_type))
-        print(f"[CLIENT TO AGENT]: audio/pcm: {len(decoded_data)} bytes")
+        #print(f"[CLIENT TO AGENT]: audio/pcm: {len(decoded_data)} bytes")
         
         # Also buffer for WAV saving if enabled
         if ENABLE_USER_AUDIO_PROCESSING:
@@ -341,10 +341,10 @@ async def send_message_endpoint(user_id: int, request: Request):
             
             if rms < volume_threshold:
                 user_silence_counters[user_id_str] += 1
-                print(f"[SILENCE]: chunk {user_silence_counters[user_id_str]} (RMS: {rms:.1f})")
+                #print(f"[SILENCE]: chunk {user_silence_counters[user_id_str]} (RMS: {rms:.1f})")
             else:
                 user_silence_counters[user_id_str] = 0
-                print(f"[SPEECH]: RMS: {rms:.1f}")
+                #print(f"[SPEECH]: RMS: {rms:.1f}")
             
             # Process when we detect end of speech (3 consecutive silent chunks)
             if user_silence_counters[user_id_str] >= 3 and len(user_audio_buffers[user_id_str]) > 3:
@@ -374,13 +374,14 @@ async def send_message_endpoint(user_id: int, request: Request):
                             if detected_watermark:
                                 from watermark import decode_message
                                 decoded_message = decode_message(detected_watermark)
-                                print(f"Watermark detected: {detected_watermark} - '{decoded_message}'")
+                                if decoded_message:
+                                    print(f"Watermark detected: {detected_watermark} - '{decoded_message}'")
                             else:
                                 print("No watermark found in user speech")
                         except Exception as e:
                             print(f"Watermark detection failed: {e}")
-                    else:
-                        print(f"[SKIPPING]: Audio too small ({len(combined_user_audio)} bytes), not saving")
+                    # else:
+                    #     print(f"[SKIPPING]: Audio too small ({len(combined_user_audio)} bytes), not saving")
                 
                 # Clear user audio buffer and reset counter
                 user_audio_buffers[user_id_str] = []
