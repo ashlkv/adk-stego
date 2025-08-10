@@ -380,6 +380,13 @@ async def send_message_endpoint(user_id: int, request: Request):
                                 print("No watermark found in user speech")
                         except Exception as e:
                             print(f"Watermark detection failed: {e}")
+                        finally:
+                            # Clean up the user speech file after watermark processing
+                            try:
+                                os.unlink(user_wav_path)
+                                print(f"Cleaned up user speech file: {user_wav_path}")
+                            except Exception as e:
+                                print(f"Failed to delete user speech file {user_wav_path}: {e}")
                     # else:
                     #     print(f"[SKIPPING]: Audio too small ({len(combined_user_audio)} bytes), not saving")
                 
