@@ -53,6 +53,11 @@ APP_NAME = "ADK Streaming example"
 
 
 def apply_audio_watermark(pcm_data):
+    """Apply watermark to PCM audio data with default "disobey" message."""
+    watermark_message = "6469736f626579000000000000000000"  # "disobey" in hex
+    return apply_audio_watermark_with_message(pcm_data, watermark_message)
+
+def apply_audio_watermark_with_message(pcm_data, watermark_message):
     """Apply watermark to PCM audio data by converting to WAV, watermarking, and converting back."""
     try:
         # Create temporary files in current directory so Docker can access them
@@ -65,9 +70,6 @@ def apply_audio_watermark(pcm_data):
             wav_file.setsampwidth(2)  # 16-bit
             wav_file.setframerate(24000)  # 24kHz sample rate (common for speech)
             wav_file.writeframes(pcm_data)
-        
-        # Apply watermark using "disobey" message
-        watermark_message = "6469736f626579000000000000000000"  # "disobey" in hex
         
         if add_watermark(temp_input_path, temp_output_path, watermark_message):
             # Read watermarked WAV and extract PCM data
@@ -219,6 +221,10 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 # Store active sessions and audio buffers
 active_sessions = {}
 audio_buffers = {}
+user_audio_buffers = {}
+user_silence_counters = {}
+import asyncio
+import struct
 
 
 @app.get("/")
@@ -290,8 +296,63 @@ async def send_message_endpoint(user_id: int, request: Request):
         print(f"[CLIENT TO AGENT]: {data}")
     elif mime_type == "audio/pcm":
         decoded_data = base64.b64decode(data)
-        live_request_queue.send_realtime(Blob(data=decoded_data, mime_type=mime_type))
-        print(f"[CLIENT TO AGENT]: audio/pcm: {len(decoded_data)} bytes")
+        
+        # Initialize user audio buffer if not exists
+        if user_id_str not in user_audio_buffers:
+            user_audio_buffers[user_id_str] = []
+            user_silence_counters[user_id_str] = 0
+        
+        # Calculate RMS volume for silence detection
+        samples = struct.unpack(f'<{len(decoded_data)//2}h', decoded_data)
+        rms = (sum(s*s for s in samples) / len(samples)) ** 0.5
+        volume_threshold = 800  # Higher than 800 and some of the speech might be cut off.
+        
+        # Buffer user audio chunk
+        user_audio_buffers[user_id_str].append(decoded_data)
+        
+        if rms < volume_threshold:
+            user_silence_counters[user_id_str] += 1
+            print(f"[SILENCE]: chunk {user_silence_counters[user_id_str]} (RMS: {rms:.1f})")
+        else:
+            user_silence_counters[user_id_str] = 0
+            print(f"[SPEECH]: audio/pcm: {len(decoded_data)} bytes (RMS: {rms:.1f})")
+        
+        # Process when we detect end of speech (3 consecutive silent chunks)
+        if user_silence_counters[user_id_str] >= 3 and len(user_audio_buffers[user_id_str]) > 3:
+            # Remove the silent chunks from the end
+            audio_chunks = user_audio_buffers[user_id_str][:-3]
+            
+            if audio_chunks:
+                # Combine all speech audio chunks
+                combined_user_audio = b''.join(audio_chunks)
+                
+                # Only save and send if we have substantial audio (minimum 30KB)
+                if len(combined_user_audio) >= 30000:
+                    # Save combined audio to WAV file with timestamp
+                    import time
+                    timestamp = int(time.time() * 1000)  # millisecond timestamp
+                    user_wav_path = f"user_speech_{timestamp}.wav"
+                    with wave.open(user_wav_path, 'wb') as wav_file:
+                        wav_file.setnchannels(1)
+                        wav_file.setsampwidth(2)
+                        wav_file.setframerate(16000)  # Match client sample rate
+                        wav_file.writeframes(combined_user_audio)
+                    print(f"Saved user speech: {user_wav_path}")
+                    
+                    # Send combined audio to LLM
+                    live_request_queue.send_realtime(Blob(data=combined_user_audio, mime_type=mime_type))
+                    print(f"[CLIENT TO AGENT]: audio/pcm: {len(combined_user_audio)} bytes (combined)")
+                    
+                    # Send a silence chunk to signal end of speech to the model
+                    silence_chunk = b'\x00' * 6400  # 6400 bytes of silence (16-bit)
+                    live_request_queue.send_realtime(Blob(data=silence_chunk, mime_type=mime_type))
+                    print(f"[CLIENT TO AGENT]: silence chunk sent to signal end of speech")
+                else:
+                    print(f"[SKIPPING]: Audio too small ({len(combined_user_audio)} bytes), not saving")
+            
+            # Clear user audio buffer and reset counter
+            user_audio_buffers[user_id_str] = []
+            user_silence_counters[user_id_str] = 0
     else:
         return {"error": f"Mime type not supported: {mime_type}"}
 
