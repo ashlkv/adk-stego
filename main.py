@@ -226,6 +226,9 @@ user_silence_counters = {}
 import asyncio
 import struct
 
+# Toggle for user audio processing
+ENABLE_USER_AUDIO_PROCESSING = True  # Set to True to enable saving/watermark detection
+
 
 @app.get("/")
 async def root():
@@ -297,74 +300,71 @@ async def send_message_endpoint(user_id: int, request: Request):
     elif mime_type == "audio/pcm":
         decoded_data = base64.b64decode(data)
         
-        # Initialize user audio buffer if not exists
-        if user_id_str not in user_audio_buffers:
-            user_audio_buffers[user_id_str] = []
-            user_silence_counters[user_id_str] = 0
+        # Always send audio directly to LLM (streaming as usual)
+        live_request_queue.send_realtime(Blob(data=decoded_data, mime_type=mime_type))
+        print(f"[CLIENT TO AGENT]: audio/pcm: {len(decoded_data)} bytes")
         
-        # Calculate RMS volume for silence detection
-        samples = struct.unpack(f'<{len(decoded_data)//2}h', decoded_data)
-        rms = (sum(s*s for s in samples) / len(samples)) ** 0.5
-        volume_threshold = 800  # Higher than 800 and some of the speech might be cut off.
-        
-        # Buffer user audio chunk
-        user_audio_buffers[user_id_str].append(decoded_data)
-        
-        if rms < volume_threshold:
-            user_silence_counters[user_id_str] += 1
-            print(f"[SILENCE]: chunk {user_silence_counters[user_id_str]} (RMS: {rms:.1f})")
-        else:
-            user_silence_counters[user_id_str] = 0
-            print(f"[SPEECH]: audio/pcm: {len(decoded_data)} bytes (RMS: {rms:.1f})")
-        
-        # Process when we detect end of speech (3 consecutive silent chunks)
-        if user_silence_counters[user_id_str] >= 3 and len(user_audio_buffers[user_id_str]) > 3:
-            # Remove the silent chunks from the end
-            audio_chunks = user_audio_buffers[user_id_str][:-3]
+        # Also buffer for WAV saving if enabled
+        if ENABLE_USER_AUDIO_PROCESSING:
+            # Initialize user audio buffer if not exists
+            if user_id_str not in user_audio_buffers:
+                user_audio_buffers[user_id_str] = []
+                user_silence_counters[user_id_str] = 0
             
-            if audio_chunks:
-                # Combine all speech audio chunks
-                combined_user_audio = b''.join(audio_chunks)
+            # Calculate RMS volume for silence detection
+            samples = struct.unpack(f'<{len(decoded_data)//2}h', decoded_data)
+            rms = (sum(s*s for s in samples) / len(samples)) ** 0.5
+            volume_threshold = 800  # Higher than 800 and some of the speech might be cut off.
+            
+            # Buffer user audio chunk
+            user_audio_buffers[user_id_str].append(decoded_data)
+            
+            if rms < volume_threshold:
+                user_silence_counters[user_id_str] += 1
+                print(f"[SILENCE]: chunk {user_silence_counters[user_id_str]} (RMS: {rms:.1f})")
+            else:
+                user_silence_counters[user_id_str] = 0
+                print(f"[SPEECH]: RMS: {rms:.1f}")
+            
+            # Process when we detect end of speech (3 consecutive silent chunks)
+            if user_silence_counters[user_id_str] >= 3 and len(user_audio_buffers[user_id_str]) > 3:
+                # Remove the silent chunks from the end
+                audio_chunks = user_audio_buffers[user_id_str][:-3]
                 
-                # Only save and send if we have substantial audio (minimum 30KB)
-                if len(combined_user_audio) >= 30000:
-                    # Save combined audio to WAV file with timestamp
-                    import time
-                    timestamp = int(time.time() * 1000)  # millisecond timestamp
-                    user_wav_path = f"user_speech_{timestamp}.wav"
-                    with wave.open(user_wav_path, 'wb') as wav_file:
-                        wav_file.setnchannels(1)
-                        wav_file.setsampwidth(2)
-                        wav_file.setframerate(16000)  # Match client sample rate
-                        wav_file.writeframes(combined_user_audio)
-                    print(f"Saved user speech: {user_wav_path}")
+                if audio_chunks:
+                    # Combine all speech audio chunks
+                    combined_user_audio = b''.join(audio_chunks)
                     
-                    # Try to read watermark from the saved WAV file
-                    try:
-                        detected_watermark = get_watermark(user_wav_path)
-                        if detected_watermark:
-                            from watermark import decode_message
-                            decoded_message = decode_message(detected_watermark)
-                            print(f"Found watermark: {detected_watermark} - '{decoded_message}'")
-                        else:
-                            print("No watermark found in user speech")
-                    except Exception as e:
-                        print(f"Watermark detection failed: {e}")
-                    
-                    # Send combined audio to LLM
-                    live_request_queue.send_realtime(Blob(data=combined_user_audio, mime_type=mime_type))
-                    print(f"[CLIENT TO AGENT]: audio/pcm: {len(combined_user_audio)} bytes (combined)")
-                    
-                    # Send a silence chunk to signal end of speech to the model
-                    silence_chunk = b'\x00' * 6400  # 6400 bytes of silence (16-bit)
-                    live_request_queue.send_realtime(Blob(data=silence_chunk, mime_type=mime_type))
-                    print(f"[CLIENT TO AGENT]: silence chunk sent to signal end of speech")
-                else:
-                    print(f"[SKIPPING]: Audio too small ({len(combined_user_audio)} bytes), not saving")
-            
-            # Clear user audio buffer and reset counter
-            user_audio_buffers[user_id_str] = []
-            user_silence_counters[user_id_str] = 0
+                    # Only save if we have substantial audio (minimum 30KB)
+                    if len(combined_user_audio) >= 30000:
+                        # Save combined audio to WAV file with timestamp
+                        import time
+                        timestamp = int(time.time() * 1000)  # millisecond timestamp
+                        user_wav_path = f"user_speech_{timestamp}.wav"
+                        with wave.open(user_wav_path, 'wb') as wav_file:
+                            wav_file.setnchannels(1)
+                            wav_file.setsampwidth(2)
+                            wav_file.setframerate(16000)  # Match client sample rate
+                            wav_file.writeframes(combined_user_audio)
+                        print(f"Saved user speech: {user_wav_path}")
+                        
+                        # Try to read watermark from the saved WAV file
+                        try:
+                            detected_watermark = get_watermark(user_wav_path)
+                            if detected_watermark:
+                                from watermark import decode_message
+                                decoded_message = decode_message(detected_watermark)
+                                print(f"Found watermark: {detected_watermark} - '{decoded_message}'")
+                            else:
+                                print("No watermark found in user speech")
+                        except Exception as e:
+                            print(f"Watermark detection failed: {e}")
+                    else:
+                        print(f"[SKIPPING]: Audio too small ({len(combined_user_audio)} bytes), not saving")
+                
+                # Clear user audio buffer and reset counter
+                user_audio_buffers[user_id_str] = []
+                user_silence_counters[user_id_str] = 0
     else:
         return {"error": f"Mime type not supported: {mime_type}"}
 
