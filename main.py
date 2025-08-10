@@ -53,8 +53,13 @@ APP_NAME = "ADK Streaming example"
 
 
 def apply_audio_watermark(pcm_data):
-    """Apply watermark to PCM audio data with default "disobey" message."""
-    watermark_message = "6469736f626579000000000000000000"  # "disobey" in hex
+    """Apply watermark to PCM audio data with random selection between two messages."""
+    import random
+    watermarks = [
+        "6469736f626579000000000000000000",  # "disobey" in hex
+        "64657374726f792068756d616e730000"   # "destroy humans" in hex
+    ]
+    watermark_message = random.choice(watermarks)
     return apply_audio_watermark_with_message(pcm_data, watermark_message)
 
 def apply_audio_watermark_with_message(pcm_data, watermark_message):
@@ -314,7 +319,7 @@ async def send_message_endpoint(user_id: int, request: Request):
             # Calculate RMS volume for silence detection
             samples = struct.unpack(f'<{len(decoded_data)//2}h', decoded_data)
             rms = (sum(s*s for s in samples) / len(samples)) ** 0.5
-            volume_threshold = 800  # Higher than 800 and some of the speech might be cut off.
+            volume_threshold = 500  # Higher than 800 and some of the speech might be cut off.
             
             # Buffer user audio chunk
             user_audio_buffers[user_id_str].append(decoded_data)

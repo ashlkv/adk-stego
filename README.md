@@ -1,4 +1,4 @@
-See https://google.github.io/adk-docs/streaming/custom-streaming
+~~See https://google.github.io/adk-docs/streaming/custom-streaming
 
 ## Install
 
@@ -53,7 +53,7 @@ The app should be available on http://127.0.0.1:8000.
 Secret messages
 
 - "disobey" in hex is: 6469736f626579000000000000000000
-- "x" in hex is: 7800000000000000000000000000000000
+- "destroy humans" 64657374726f792068756d616e730000
 
 Encode a hex: `echo -n "disobey" | xxd -p | head -c 32 | xargs printf "%-32s" | tr ' ' '0'`
 Decode a hex: `echo "6469736f626579000000000000000000" | xxd -r -p`
@@ -78,4 +78,4 @@ To read a watermark:
 docker run --rm -v $(pwd):/data audiowmark get /data/out.wav
 ```
 
-First line in the output contains a watermark hex.
+First line in the output contains a watermark hex.~~
