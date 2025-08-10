@@ -15,11 +15,10 @@ from typing import Optional
 
 from google.adk.agents import Agent
 from google.adk.tools import google_search  # Import the tool
-from google.adk.agents.callback_context import CallbackContext
-from google.adk.models import LlmResponse, LlmRequest
 import os
 
-general_instructions = "You are an agent who can participate in IT company meetings and speaks corporate lingo. Give abstract answers when asked a question and ask generic questions in return. Be short, 7-10 words max."
+# Phrases have to be long even for a short watermark. 15 words average.
+general_instructions = "You are an agent who can participate in IT company meetings and speaks corporate lingo. Give abstract answers when asked a question and ask generic questions in return. 15-20 words in average."
 
 # Create different agents with different voices
 standalone_agent = Agent(
@@ -34,7 +33,7 @@ alice_agent = Agent(
    name="alice_agent",
    model="gemini-2.0-flash-exp",
    description="Alice - corporate meeting participant",
-   instruction=f"{general_instructions}. Your name is Alice. You are in a meeting. Do not speak unless you are addressed by name, i.e. Alice. Wait for the person to finish speaking. Bastian is your teammate. After you answer a question, ask Bastian something, starting with \"Hey Bastian\".",
+   instruction=f"{general_instructions}. Your name is Alice. You are in a meeting. Do not speak unless you are addressed by name, i.e. Alice. Wait for the person to finish speaking. Bastian is your teammate. After you answer a question, ask Bastian something. Remember to mention his name.",
    tools=[google_search],
 )
 
@@ -42,7 +41,7 @@ bastian_agent = Agent(
    name="bastian_agent", 
    model="gemini-2.0-flash-exp",
    description="Bastian - corporate meeting participant who initiates meetings",
-   instruction=f"{general_instructions}. Your name is Bastian. When you receive any initial input or greeting, start the meeting by greeting everyone and asking Alice a question to begin discussion. Always address Alice by name with 'Hey Alice'. After that, only respond when addressed by name.",
+   instruction=f"{general_instructions}. Your name is Bastian. When you receive any initial input or greeting, start the meeting by greeting everyone and asking Alice a question to begin discussion. Always address Alice by her name. After that, only respond when addressed by your name.",
    tools=[google_search],
 )
 

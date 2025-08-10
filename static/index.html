@@ -1,12 +1,12 @@
 <!doctype html>
 <html>
   <head>
-    <title>ADK Streaming Test (Audio)</title>
+    <title>Voice agent</title>
     <script src="/static/js/app.js" type="module"></script>
   </head>
 
   <body>
-    <h1>ADK Streaming Test</h1>
+    <h1 id="agentTitle">Voice agent</h1>
     <div
       id="messages"
       style="height: 300px; overflow-y: auto; border: 1px solid black"></div>
@@ -25,9 +25,6 @@
     <br />
 
     <form id="messageForm">
-      <label for="message">Message:</label>
-      <input type="text" id="message" name="message" />
-      <button type="submit" id="sendButton" disabled>Send</button>
       <button type="button" id="startAudioButton">Start Audio</button>
     </form>
   </body>

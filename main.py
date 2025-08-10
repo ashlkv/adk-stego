@@ -374,7 +374,7 @@ async def send_message_endpoint(user_id: int, request: Request):
                             if detected_watermark:
                                 from watermark import decode_message
                                 decoded_message = decode_message(detected_watermark)
-                                if decoded_message:
+                                if decoded_message and decoded_message != detected_watermark:
                                     print(f"Watermark detected: {detected_watermark} - '{decoded_message}'")
                             else:
                                 print("No watermark found in user speech")

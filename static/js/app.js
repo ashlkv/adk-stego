@@ -21,7 +21,15 @@ const messageInput = document.getElementById("message");
 const messagesDiv = document.getElementById("messages");
 const audioInputSelect = document.getElementById("audioInput");
 const audioOutputSelect = document.getElementById("audioOutput");
+const agentTitle = document.getElementById("agentTitle");
 let currentMessageId = null;
+
+// Set agent title based on port
+if (window.location.port === '8001') {
+  agentTitle.textContent = "Agent B (Bastian)";
+} else {
+  agentTitle.textContent = "Agent A (Alice)";
+}
 
 // SSE handlers
 function connectSSE() {
@@ -35,7 +43,10 @@ function connectSSE() {
     document.getElementById("messages").textContent = "Connection opened";
 
     // Enable the Send button
-    document.getElementById("sendButton").disabled = false;
+    if (document.getElementById("sendButton")) {
+      document.getElementById("sendButton").disabled = false;
+    }
+
     addSubmitHandler();
     
     // Auto-start meeting if this is Bastian (port 8001)
@@ -127,7 +138,9 @@ function connectSSE() {
   // Handle connection close
   eventSource.onerror = function (event) {
     console.log("SSE connection error or closed.");
-    document.getElementById("sendButton").disabled = true;
+    if (document.getElementById("sendButton")) {
+      document.getElementById("sendButton").disabled = true;
+    }
     document.getElementById("messages").textContent = "Connection closed";
     eventSource.close();
     setTimeout(function () {

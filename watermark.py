@@ -5,7 +5,7 @@ import sys
 import os
 
 
-def add_watermark(input_file, output_file, message, strength=16):
+def add_watermark(input_file, output_file, message, strength=20):
     """Add a watermark to an audio file using audiowmark Docker container."""
     try:
         current_dir = os.getcwd()

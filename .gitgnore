@@ -1,5 +1,4 @@
 .idea
-
 *.wav
 *.pem
 .env
