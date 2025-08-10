@@ -35,6 +35,17 @@ function connectSSE() {
     // Enable the Send button
     document.getElementById("sendButton").disabled = false;
     addSubmitHandler();
+    
+    // Auto-start meeting if this is Bastian (port 8001)
+    if (window.location.port === '8001') {
+      setTimeout(() => {
+        sendMessage({
+          mime_type: "text/plain",
+          data: "meeting start",
+        });
+        console.log("[AUTO-START]: Bastian initiating meeting");
+      }, 1000); // Wait 1 second after connection
+    }
   };
 
   // Handle incoming messages
@@ -53,7 +64,7 @@ function connectSSE() {
       
       // Save captured audio when turn is complete
       if (isCapturing && capturedAudioData.length > 0) {
-        saveAudioToFile();
+        // saveAudioToFile();
         isCapturing = false;
       }
       

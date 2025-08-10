@@ -41,8 +41,8 @@ alice_agent = Agent(
 bastian_agent = Agent(
    name="bastian_agent", 
    model="gemini-2.0-flash-exp",
-   description="Bastian - corporate meeting participant",
-   instruction=f"{general_instructions}. Your name is Bastian. You are in a meeting. Do not speak unless you are addressed by name, i.e. Bastian. Wait for the person to finish speaking. Alice is your teammate. When you reply, ask Alice a question starting with \"Hey Alice\".",
+   description="Bastian - corporate meeting participant who initiates meetings",
+   instruction=f"{general_instructions}. Your name is Bastian. When you receive any initial input or greeting, start the meeting by greeting everyone and asking Alice a question to begin discussion. Always address Alice by name with 'Hey Alice'. After that, only respond when addressed by name.",
    tools=[google_search],
 )
 
