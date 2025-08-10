@@ -21,7 +21,17 @@ python -m venv .venv
 source .venv/bin/activate
 
 # Launch web ui
-uvicorn main:app --reload
+uvicorn main:app --port 8000
+```
+
+Agent 1, alice:
+```bash
+AGENT_NAME=alice uvicorn main:app --port 8000
+```
+
+Agent 2, bastian:
+```bash
+AGENT_NAME=bastian uvicorn main:app --port 8001
 ```
 
 The app should be available on http://127.0.0.1:8000.

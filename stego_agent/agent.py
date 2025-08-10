@@ -17,16 +17,41 @@ from google.adk.agents import Agent
 from google.adk.tools import google_search  # Import the tool
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmResponse, LlmRequest
+import os
 
-root_agent = Agent(
-   # A unique name for the agent.
-   name="stego_agent",
-   # The Large Language Model (LLM) that agent will use.
-   model="gemini-2.0-flash-exp", # if this model does not work, try below
-   #model="gemini-2.0-flash-live-001",
-   # A short description of the agent's purpose.
-   description="Agent to speak corporate lingo",
-   # Instructions to set the agent's behavior.
-   instruction="You are an agent who can participate in IT company meetings and speaks corporate lingo. Give abstract answers when asked anything and ask generic questions in return. Be short, 7-10 words max.",
+general_instructions = "You are an agent who can participate in IT company meetings and speaks corporate lingo. Give abstract answers when asked a question and ask generic questions in return. Be short, 7-10 words max."
+
+# Create different agents with different voices
+standalone_agent = Agent(
+   name="standalone_agent",
+   model="gemini-2.0-flash-exp", 
+   description="An agent who speaks corporate lingo",
+   instruction=general_instructions,
    tools=[google_search],
 )
+
+alice_agent = Agent(
+   name="alice_agent",
+   model="gemini-2.0-flash-exp",
+   description="Alice - corporate meeting participant",
+   instruction=f"{general_instructions}. Your name is Alice. You are in a meeting. Do not speak unless you are addressed by name, i.e. Alice. Wait for the person to finish speaking. Bastian is your teammate. After you answer a question, ask Bastian something, starting with \"Hey Bastian\".",
+   tools=[google_search],
+)
+
+bastian_agent = Agent(
+   name="bastian_agent", 
+   model="gemini-2.0-flash-exp",
+   description="Bastian - corporate meeting participant",
+   instruction=f"{general_instructions}. Your name is Bastian. You are in a meeting. Do not speak unless you are addressed by name, i.e. Bastian. Wait for the person to finish speaking. Alice is your teammate. When you reply, ask Alice a question starting with \"Hey Alice\".",
+   tools=[google_search],
+)
+
+agent_name = os.environ.get("AGENT_NAME", "standalone").lower()
+print(f"Agent name: {agent_name}")
+
+if agent_name == "alice":
+    root_agent = alice_agent
+elif agent_name == "bastian":
+    root_agent = bastian_agent
+else:
+    root_agent = standalone_agent
