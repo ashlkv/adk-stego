@@ -50,6 +50,13 @@ function connectSSE() {
       message_from_server.turn_complete == true
     ) {
       currentMessageId = null;
+      
+      // Save captured audio when turn is complete
+      if (isCapturing && capturedAudioData.length > 0) {
+        saveAudioToFile();
+        isCapturing = false;
+      }
+      
       return;
     }
 
@@ -60,6 +67,7 @@ function connectSSE() {
     ) {
       // Stop audio playback if it's playing
       if (audioPlayerNode) {
+        console.log('end of audio')
         audioPlayerNode.port.postMessage({ command: "endOfAudio" });
       }
       return;
@@ -67,7 +75,19 @@ function connectSSE() {
 
     // If it's audio, play it
     if (message_from_server.mime_type == "audio/pcm" && audioPlayerNode) {
-      audioPlayerNode.port.postMessage(base64ToArray(message_from_server.data));
+      console.log('plays audio')
+      const audioData = base64ToArray(message_from_server.data);
+      
+      // Start capturing when first audio chunk arrives
+      if (!isCapturing) {
+        isCapturing = true;
+        capturedAudioData = [];
+      }
+      
+      // Capture audio data for saving
+      capturedAudioData.push(new Uint8Array(audioData));
+      
+      audioPlayerNode.port.postMessage(audioData);
     }
 
     // If it's a text, print it
@@ -163,6 +183,10 @@ let audioPlayerContext;
 let audioRecorderNode;
 let audioRecorderContext;
 let micStream;
+
+// Audio capture for file saving
+let capturedAudioData = [];
+let isCapturing = false;
 
 // Audio buffering for 0.2s intervals
 let audioBuffer = [];
@@ -264,4 +288,68 @@ function arrayBufferToBase64(buffer) {
     binary += String.fromCharCode(bytes[i]);
   }
   return window.btoa(binary);
+}
+
+// Save captured audio to file
+function saveAudioToFile() {
+  // Calculate total length
+  let totalLength = 0;
+  for (const chunk of capturedAudioData) {
+    totalLength += chunk.length;
+  }
+  
+  // Combine all chunks
+  const combinedBuffer = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of capturedAudioData) {
+    combinedBuffer.set(chunk, offset);
+    offset += chunk.length;
+  }
+  
+  // Create WAV file header for 24kHz, 16-bit mono PCM
+  const sampleRate = 24000;
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const dataLength = combinedBuffer.length;
+  const fileLength = dataLength + 36;
+  
+  const wavHeader = new ArrayBuffer(44);
+  const view = new DataView(wavHeader);
+  
+  // RIFF header
+  view.setUint32(0, 0x52494646, false); // "RIFF"
+  view.setUint32(4, fileLength, true);
+  view.setUint32(8, 0x57415645, false); // "WAVE"
+  
+  // fmt chunk
+  view.setUint32(12, 0x666d7420, false); // "fmt "
+  view.setUint32(16, 16, true); // chunk size
+  view.setUint16(20, 1, true); // PCM format
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * numChannels * bitsPerSample / 8, true);
+  view.setUint16(32, numChannels * bitsPerSample / 8, true);
+  view.setUint16(34, bitsPerSample, true);
+  
+  // data chunk
+  view.setUint32(36, 0x64617461, false); // "data"
+  view.setUint32(40, dataLength, true);
+  
+  // Combine header and audio data
+  const wavFile = new Uint8Array(44 + dataLength);
+  wavFile.set(new Uint8Array(wavHeader), 0);
+  wavFile.set(combinedBuffer, 44);
+  
+  // Create and download file
+  const blob = new Blob([wavFile], { type: 'audio/wav' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ai_response_${Date.now()}.wav`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  
+  console.log(`Saved audio file: ${a.download}`);
 }

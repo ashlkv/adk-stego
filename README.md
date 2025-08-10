@@ -19,7 +19,12 @@ python -m venv .venv
 
 # Activate (each new terminal)
 source .venv/bin/activate
+
+# Launch web ui
+uvicorn main:app --reload
 ```
+
+The app should be available on http://127.0.0.1:8000.
 
 ## Watermarks
 
