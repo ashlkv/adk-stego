@@ -26,7 +26,7 @@ from watermark import add_watermark, encode_message, get_watermark
 from google.genai.types import (
     Part,
     Content,
-    Blob,
+    Blob, SpeechConfig, VoiceConfig, PrebuiltVoiceConfig,
 )
 
 from google.adk.runners import InMemoryRunner
@@ -114,9 +114,24 @@ async def start_agent_session(user_id, is_audio=False):
         user_id=user_id,  # Replace with actual user ID
     )
 
-    # Set response modality
+    # Set response modality and voice
     modality = "AUDIO" if is_audio else "TEXT"
-    run_config = RunConfig(response_modalities=[modality])
+
+    # Configure voice based on agent
+    agent_name = os.environ.get("AGENT_NAME", "standalone").lower()
+    
+    if agent_name == "alice":
+        # Female voice for Alice
+        speech_config = SpeechConfig(
+            language_code="en-US",
+            voice_config=VoiceConfig(
+                prebuilt_voice_config=PrebuiltVoiceConfig(voice_name="Aoede")  # Female voice
+            ),
+        )
+        run_config = RunConfig(response_modalities=[modality], speech_config=speech_config)
+    else:
+        # Default voice for other agents
+        run_config = RunConfig(response_modalities=[modality])
 
     # Create a LiveRequestQueue for this session
     live_request_queue = LiveRequestQueue()
