@@ -14,7 +14,7 @@ def add_watermark(input_file, output_file, message, strength=16):
             'audiowmark', 'add', '--strength', str(strength),
             f'/data/{input_file}', f'/data/{output_file}', message
         ], capture_output=True, text=True, check=True)
-        print(f"Watermark added successfully to {output_file}")
+        print(f"Watermark {message} added to {output_file}")
         return True
     except subprocess.CalledProcessError as e:
         print(f"Error adding watermark: {e.stderr}")

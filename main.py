@@ -21,7 +21,7 @@ import wave
 
 from pathlib import Path
 from dotenv import load_dotenv
-from test_watermark import add_watermark, encode_message
+from watermark import add_watermark, encode_message, get_watermark
 
 from google.genai.types import (
     Part,
@@ -55,38 +55,37 @@ APP_NAME = "ADK Streaming example"
 def apply_audio_watermark(pcm_data):
     """Apply watermark to PCM audio data by converting to WAV, watermarking, and converting back."""
     try:
-        # Create temporary files
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_input, \
-             tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_output:
+        # Create temporary files in current directory so Docker can access them
+        temp_input_path = f"temp_input_{os.getpid()}.wav"
+        temp_output_path = f"temp_output_{os.getpid()}.wav"
+        
+        # Convert PCM to WAV
+        with wave.open(temp_input_path, 'wb') as wav_file:
+            wav_file.setnchannels(1)  # Mono
+            wav_file.setsampwidth(2)  # 16-bit
+            wav_file.setframerate(24000)  # 24kHz sample rate (common for speech)
+            wav_file.writeframes(pcm_data)
+        
+        # Apply watermark using "disobey" message
+        watermark_message = "6469736f626579000000000000000000"  # "disobey" in hex
+        
+        if add_watermark(temp_input_path, temp_output_path, watermark_message):
+            # Read watermarked WAV and extract PCM data
+            with wave.open(temp_output_path, 'rb') as wav_file:
+                watermarked_pcm = wav_file.readframes(wav_file.getnframes())
             
-            temp_input_path = temp_input.name
-            temp_output_path = temp_output.name
+            # Clean up temp files
+            os.unlink(temp_input_path)
+            os.unlink(temp_output_path)
             
-            # Convert PCM to WAV
-            with wave.open(temp_input_path, 'wb') as wav_file:
-                wav_file.setnchannels(1)  # Mono
-                wav_file.setsampwidth(2)  # 16-bit
-                wav_file.setframerate(24000)  # 24kHz sample rate (common for speech)
-                wav_file.writeframes(pcm_data)
-            
-            # Apply watermark using "disobey" message
-            watermark_message = "6469736f626579000000000000000000"  # "disobey" in hex
-            
-            if add_watermark(os.path.basename(temp_input_path), os.path.basename(temp_output_path), watermark_message):
-                # Read watermarked WAV and extract PCM data
-                with wave.open(temp_output_path, 'rb') as wav_file:
-                    watermarked_pcm = wav_file.readframes(wav_file.getnframes())
-                
-                # Clean up temp files
+            return watermarked_pcm
+        else:
+            # Clean up temp files on failure
+            if os.path.exists(temp_input_path):
                 os.unlink(temp_input_path)
+            if os.path.exists(temp_output_path):
                 os.unlink(temp_output_path)
-                
-                return watermarked_pcm
-            else:
-                # Clean up temp files on failure
-                os.unlink(temp_input_path)
-                os.unlink(temp_output_path)
-                return None
+            return None
                 
     except Exception as e:
         print(f"Error applying watermark: {e}")
@@ -126,9 +125,45 @@ async def start_agent_session(user_id, is_audio=False):
 
 async def agent_to_client_sse(live_events):
     """Agent to client communication via SSE"""
+    session_id = id(live_events)  # Use live_events object id as session identifier
+    audio_buffers[session_id] = []
+    
     async for event in live_events:
-        # If the turn complete or interrupted, send it
+        # If the turn is complete or interrupted, process buffered audio and send completion
         if event.turn_complete or event.interrupted:
+            # Process any buffered audio chunks
+            if audio_buffers[session_id]:
+                # Combine all audio chunks
+                combined_audio = b''.join(audio_buffers[session_id])
+                
+                # Apply watermark to combined audio
+                watermarked_data = apply_audio_watermark(combined_audio)
+                
+                # Verify watermark
+                temp_verify_path = f"temp_verify_{os.getpid()}.wav"
+                with wave.open(temp_verify_path, 'wb') as wav_file:
+                    wav_file.setnchannels(1)
+                    wav_file.setsampwidth(2)
+                    wav_file.setframerate(24000)
+                    wav_file.writeframes(watermarked_data)
+                detected = get_watermark(temp_verify_path)
+                print(f"watermark read: {detected}")
+                os.unlink(temp_verify_path)
+                
+                # Split watermarked audio into chunks and send
+                chunk_size = 11520  # Approximate chunk size from original stream
+                for i in range(0, len(watermarked_data), chunk_size):
+                    chunk = watermarked_data[i:i+chunk_size]
+                    message = {
+                        "mime_type": "audio/pcm",
+                        "data": base64.b64encode(chunk).decode("ascii")
+                    }
+                    yield f"data: {json.dumps(message)}\n\n"
+                    print(f"[AGENT TO CLIENT]: audio/pcm: {len(chunk)} bytes (watermarked chunk)")
+                
+                # Clear buffer
+                audio_buffers[session_id] = []
+            
             message = {
                 "turn_complete": event.turn_complete,
                 "interrupted": event.interrupted,
@@ -144,20 +179,14 @@ async def agent_to_client_sse(live_events):
         if not part:
             continue
 
-        # If it's audio, apply watermark and send Base64 encoded audio data
+        # If it's audio, buffer it for watermarking at turn completion
         is_audio = part.inline_data and part.inline_data.mime_type.startswith("audio/pcm")
         if is_audio:
             audio_data = part.inline_data and part.inline_data.data
             if audio_data:
-                # Apply watermark to audio data
-                watermarked_data = apply_audio_watermark(audio_data)
-                
-                message = {
-                    "mime_type": "audio/pcm",
-                    "data": base64.b64encode(watermarked_data or audio_data).decode("ascii")
-                }
-                yield f"data: {json.dumps(message)}\n\n"
-                print(f"[AGENT TO CLIENT]: audio/pcm: {len(audio_data)} bytes (watermarked).")
+                # Buffer audio chunk
+                audio_buffers[session_id].append(audio_data)
+                print(f"[BUFFERING]: audio/pcm: {len(audio_data)} bytes")
                 continue
 
         # If it's text and a parial text, send it
@@ -187,8 +216,9 @@ app.add_middleware(
 STATIC_DIR = Path("static")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-# Store active sessions
+# Store active sessions and audio buffers
 active_sessions = {}
+audio_buffers = {}
 
 
 @app.get("/")
