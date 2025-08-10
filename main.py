@@ -339,6 +339,18 @@ async def send_message_endpoint(user_id: int, request: Request):
                         wav_file.writeframes(combined_user_audio)
                     print(f"Saved user speech: {user_wav_path}")
                     
+                    # Try to read watermark from the saved WAV file
+                    try:
+                        detected_watermark = get_watermark(user_wav_path)
+                        if detected_watermark:
+                            from watermark import decode_message
+                            decoded_message = decode_message(detected_watermark)
+                            print(f"Found watermark: {detected_watermark} - '{decoded_message}'")
+                        else:
+                            print("No watermark found in user speech")
+                    except Exception as e:
+                        print(f"Watermark detection failed: {e}")
+                    
                     # Send combined audio to LLM
                     live_request_queue.send_realtime(Blob(data=combined_user_audio, mime_type=mime_type))
                     print(f"[CLIENT TO AGENT]: audio/pcm: {len(combined_user_audio)} bytes (combined)")
