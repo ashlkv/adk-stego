@@ -18,35 +18,15 @@ from google.adk.tools import google_search  # Import the tool
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmResponse, LlmRequest
 
-
-def before_model_callback(
-        callback_context: CallbackContext, llm_request: LlmRequest
-) -> Optional[LlmResponse]:
-   print("Before model callback")
-
-
-def after_model_callback(callback_context: CallbackContext, llm_response: LlmResponse) -> None:
-   print("After model callback")
-   return None
-
-
-def after_agent_callback() -> None:
-   print("after_agent_callback")
-   return None
-
 root_agent = Agent(
    # A unique name for the agent.
-   name="google_search_agent",
+   name="stego_agent",
    # The Large Language Model (LLM) that agent will use.
    model="gemini-2.0-flash-exp", # if this model does not work, try below
    #model="gemini-2.0-flash-live-001",
    # A short description of the agent's purpose.
-   description="Agent to answer questions using Google Search.",
+   description="Agent to speak corporate lingo",
    # Instructions to set the agent's behavior.
-   instruction="Answer the question using the Google Search tool.",
-   # Add google_search tool to perform grounding with Google search.
+   instruction="You are an agent who can participate in IT company meetings and speaks corporate lingo. Give abstract answers when asked anything and ask generic questions in return. Be short, 7-10 words max.",
    tools=[google_search],
-   after_model_callback=after_model_callback,
-   before_model_callback=before_model_callback,
-   after_agent_callback=after_agent_callback
 )
