@@ -4,7 +4,7 @@
 
 let micStream;
 
-export async function startAudioRecorderWorklet(audioRecorderHandler) {
+export async function startAudioRecorderWorklet(audioRecorderHandler, selectedDeviceId = null) {
   // Create an AudioContext
   const audioRecorderContext = new AudioContext({ sampleRate: 16000 });
   console.log("AudioContext sample rate:", audioRecorderContext.sampleRate);
@@ -14,9 +14,14 @@ export async function startAudioRecorderWorklet(audioRecorderHandler) {
   await audioRecorderContext.audioWorklet.addModule(workletURL);
 
   // Request access to the microphone
-  micStream = await navigator.mediaDevices.getUserMedia({
-    audio: { channelCount: 1 },
-  });
+  const constraints = {
+    audio: { 
+      channelCount: 1,
+      ...(selectedDeviceId && { deviceId: { exact: selectedDeviceId } })
+    }
+  };
+  
+  micStream = await navigator.mediaDevices.getUserMedia(constraints);
   const source = audioRecorderContext.createMediaStreamSource(micStream);
 
   // Create an AudioWorkletNode that uses the PCMProcessor

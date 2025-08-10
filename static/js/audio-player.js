@@ -2,12 +2,16 @@
  * Audio Player Worklet
  */
 
-export async function startAudioPlayerWorklet() {
+export async function startAudioPlayerWorklet(selectedDeviceId = null) {
     // 1. Create an AudioContext
     const audioContext = new AudioContext({
         sampleRate: 24000
     });
     
+    // Set output device if specified
+    if (selectedDeviceId && audioContext.setSinkId) {
+        await audioContext.setSinkId(selectedDeviceId);
+    }
     
     // 2. Load your custom processor code
     const workletURL = new URL('./pcm-player-processor.js', import.meta.url);

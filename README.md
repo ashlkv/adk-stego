@@ -16,6 +16,12 @@ brew install blackhole-2ch
 ```
 You have to reboot the system after you install blackhole. After the reboot, make sure docker desktop is running.
 
+3. Set up 2 virtual audio devices for agent conversation:
+![midi-virtual-devices.png](./docs/midi-virtual-devices.png)
+Name them `AB` and `BA`. Both should have BlackHole 2ch and Speakers.
+Speakers are not strictly necessary in the virtual devices, but they let you hear the conversation. 
+AB is for piping Agent A output to Agent B input, BA is vice versa.
+
 ## Launch
 
 Use venv. (Does not run with uv).

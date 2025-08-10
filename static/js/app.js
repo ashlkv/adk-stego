@@ -19,6 +19,8 @@ let is_audio = false;
 const messageForm = document.getElementById("messageForm");
 const messageInput = document.getElementById("message");
 const messagesDiv = document.getElementById("messages");
+const audioInputSelect = document.getElementById("audioInput");
+const audioOutputSelect = document.getElementById("audioOutput");
 let currentMessageId = null;
 
 // SSE handlers
@@ -64,7 +66,7 @@ function connectSSE() {
       
       // Save captured audio when turn is complete
       if (isCapturing && capturedAudioData.length > 0) {
-        // saveAudioToFile();
+        saveAudioToFile();
         isCapturing = false;
       }
       
@@ -134,6 +136,46 @@ function connectSSE() {
   };
 }
 connectSSE();
+
+// Populate device lists
+async function populateDevices() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    
+    // Clear existing options
+    audioInputSelect.innerHTML = '';
+    audioOutputSelect.innerHTML = '';
+    
+    let firstInput = null;
+    let firstOutput = null;
+    
+    devices.forEach(device => {
+      const option = document.createElement('option');
+      option.value = device.deviceId;
+      option.textContent = device.label || `${device.kind} (${device.deviceId.slice(0, 8)}...)`;
+      
+      const isBlackhole = device.label && device.label.toLowerCase().includes('blackhole');
+      
+      if (device.kind === 'audioinput') {
+        audioInputSelect.appendChild(option);
+        if (!firstInput && !isBlackhole) firstInput = device.deviceId;
+      } else if (device.kind === 'audiooutput') {
+        audioOutputSelect.appendChild(option);
+        if (!firstOutput && !isBlackhole) firstOutput = device.deviceId;
+      }
+    });
+    
+    // Select first available devices by default
+    if (firstInput) audioInputSelect.value = firstInput;
+    if (firstOutput) audioOutputSelect.value = firstOutput;
+    
+  } catch (error) {
+    console.error('Error enumerating devices:', error);
+  }
+}
+
+// Initialize device list
+populateDevices();
 
 // Add submit handler to the form
 function addSubmitHandler() {
@@ -209,13 +251,16 @@ import { startAudioRecorderWorklet } from "./audio-recorder.js";
 
 // Start audio
 function startAudio() {
+  const selectedInputId = audioInputSelect.value;
+  const selectedOutputId = audioOutputSelect.value;
+  
   // Start audio output
-  startAudioPlayerWorklet().then(([node, ctx]) => {
+  startAudioPlayerWorklet(selectedOutputId).then(([node, ctx]) => {
     audioPlayerNode = node;
     audioPlayerContext = ctx;
   });
   // Start audio input
-  startAudioRecorderWorklet(audioRecorderHandler).then(
+  startAudioRecorderWorklet(audioRecorderHandler, selectedInputId).then(
     ([node, ctx, stream]) => {
       audioRecorderNode = node;
       audioRecorderContext = ctx;
