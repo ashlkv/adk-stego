@@ -2,13 +2,19 @@ See https://google.github.io/adk-docs/streaming/custom-streaming
 
 ## Install
 
-1. Build audio watermark package:
+1. Make sure docker desktop is running. Build audio watermark package:
 
 ```bash
 git clone https://github.com/swesterfeld/audiowmark.git
 cd audiowmark
 docker build -t audiowmark .
 ```
+
+2. Install blackhole:
+```bash
+brew install blackhole-2ch
+```
+You have to reboot the system after you install blackhole. After the reboot, make sure docker desktop is running.
 
 ## Launch
 
