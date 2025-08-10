@@ -66,7 +66,8 @@ function connectSSE() {
       
       // Save captured audio when turn is complete
       if (isCapturing && capturedAudioData.length > 0) {
-        saveAudioToFile();
+        // You can save ai response to wav to make sure there is a watermark embedded
+        // saveAudioToFile();
         isCapturing = false;
       }
       
