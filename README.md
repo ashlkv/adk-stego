@@ -1,5 +1,3 @@
-~~See https://google.github.io/adk-docs/streaming/custom-streaming
-
 ## Install
 
 1. Make sure you have homebrew and Docker Desktop installed.
@@ -34,15 +32,19 @@ Additionally, create a multi-output device. This way you can hear the conversati
 
 ## Launch
 
-Use venv. (Does not run with uv).
-
+Enable and activate virtual environment with venv:
 ```bash
 python -m venv .venv
-
-# Activate (each new terminal)
 source .venv/bin/activate
+```
 
-# Launch web ui
+Install python dependencies if not already:
+```bash
+pip install -r requirements.txt
+```
+
+Launch web ui:
+```bash
 uvicorn main:app --port 8000
 ```
 
@@ -55,8 +57,8 @@ The app should be available on http://127.0.0.1:8000.
 uvicorn main:app --port 8000
 ```
 This will launch web ui at http://127.0.0.1:8000.
-In web ui, choose regular mic and speakers in device dropdowns. P
-
+In web ui, choose regular mic and speakers in device dropdowns. Click "Start audio" to launch agent live.
+Start talking. The agent should reply.
 
 ### Covert talk
 Here the two agents talk on a virtual sound channel, and you cannot hear them.
