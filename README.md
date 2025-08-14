@@ -1,3 +1,6 @@
+This is a demo of two voice agents chatting to each other in Google meet, while embedding and reading hidden messages in their inconspicuous corporate lingo.
+It is built on top of the [Google ADK streaming example](https://github.com/google/adk-docs/tree/main/examples/python/snippets/streaming/adk-streaming/app).
+
 ## Install
 
 1. Make sure you have homebrew and Docker Desktop installed.
