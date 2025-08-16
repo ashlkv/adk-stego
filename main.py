@@ -16,7 +16,6 @@ import os
 import json
 import base64
 import warnings
-import tempfile
 import wave
 
 from pathlib import Path
@@ -39,6 +38,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from stego_agent.agent import root_agent
+from langfuse import Langfuse
 
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 
@@ -46,11 +46,33 @@ warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 # ADK Streaming
 #
 
-# Load Gemini API Key
 load_dotenv()
 
-APP_NAME = "ADK Streaming example"
+LANGFUSE_SECRET_KEY = os.getenv("LANGFUSE_SECRET_KEY")
+LANGFUSE_PUBLIC_KEY = os.getenv("LANGFUSE_PUBLIC_KEY")
+LANGFUSE_HOST = os.getenv("LANGFUSE_HOST")
 
+langfuse = Langfuse(public_key=LANGFUSE_PUBLIC_KEY, secret_key=LANGFUSE_SECRET_KEY, host=LANGFUSE_HOST)
+
+def calculate_quality_scores(user_input, agent_response):
+    """Calculate conversation quality scores for Langfuse"""
+    scores = {}
+    
+    # Response length score (longer responses might indicate more engagement)
+    response_length = len(agent_response.split())
+    scores["response_length"] = min(response_length / 20.0, 1.0)  # Normalize to 0-1, cap at 20 words
+    
+    # Corporate buzzword density (for this specific agent)
+    buzzwords = ["synergize", "leverage", "optimize", "streamline", "deliverables", "strategic", "value-added", "robust", "collaborative", "facilitate"]
+    buzzword_count = sum(1 for word in buzzwords if word.lower() in agent_response.lower())
+    scores["corporate_buzzword_score"] = min(buzzword_count / 3.0, 1.0)  # Normalize, cap at 3 buzzwords
+    
+    # Engagement score (if user asks questions, agent should respond appropriately)
+    has_question = "?" in user_input
+    agent_asks_back = "?" in agent_response
+    scores["engagement_score"] = 1.0 if (has_question and len(agent_response) > 10) or agent_asks_back else 0.5
+    
+    return scores
 
 def apply_audio_watermark(pcm_data):
     """Apply watermark to PCM audio data with random selection between two messages."""
@@ -144,7 +166,6 @@ async def start_agent_session(user_id, is_audio=False):
     )
     return live_events, live_request_queue
 
-
 async def agent_to_client_sse(live_events):
     """Agent to client communication via SSE"""
     session_id = id(live_events)  # Use live_events object id as session identifier
@@ -186,6 +207,29 @@ async def agent_to_client_sse(live_events):
                 # Clear buffer
                 audio_buffers[session_id] = []
             
+            # Complete any pending traces with the full response
+            for user_id, trace_data in list(pending_trace_ids.items()):
+                if trace_data["response_parts"]:
+                    complete_response = "".join(trace_data["response_parts"])
+                    trace = langfuse.trace(id=trace_data["trace_id"])
+                    
+                    # Update trace with output
+                    trace.update(output=complete_response)
+                    
+                    # Calculate and add quality scores
+                    user_input = trace_data.get("user_input", "")
+                    if user_input:
+                        quality_scores = calculate_quality_scores(user_input, complete_response)
+                        for score_name, score_value in quality_scores.items():
+                            langfuse.score(
+                                trace_id=trace_data["trace_id"],
+                                name=score_name,
+                                value=score_value,
+                                comment=f"Auto-calculated {score_name}"
+                            )
+                    
+                    del pending_trace_ids[user_id]
+            
             message = {
                 "turn_complete": event.turn_complete,
                 "interrupted": event.interrupted,
@@ -219,6 +263,10 @@ async def agent_to_client_sse(live_events):
             }
             yield f"data: {json.dumps(message)}\n\n"
             print(f"[AGENT TO CLIENT]: text/plain: {message}")
+            
+            # Collect response parts for any pending traces
+            for user_id, trace_data in pending_trace_ids.items():
+                trace_data["response_parts"].append(part.text)
 
 
 #
@@ -243,6 +291,7 @@ active_sessions = {}
 audio_buffers = {}
 user_audio_buffers = {}
 user_silence_counters = {}
+pending_trace_ids = {}  # Store trace IDs waiting for agent response
 import asyncio
 import struct
 
@@ -316,6 +365,16 @@ async def send_message_endpoint(user_id: int, request: Request):
     if mime_type == "text/plain":
         content = Content(role="user", parts=[Part.from_text(text=data)])
         live_request_queue.send_content(content=content)
+        
+        # Create trace and store ID for later completion
+        trace = langfuse.trace(
+            name="conversation_turn",
+            input=data,
+            user_id=user_id_str,
+            session_id=f"conversation_{user_id_str}",
+            metadata={"message_length": len(data)}
+        )
+        pending_trace_ids[user_id_str] = {"trace_id": trace.id, "response_parts": [], "user_input": data}
         #print(f"[CLIENT TO AGENT]: {data}")
     elif mime_type == "audio/pcm":
         decoded_data = base64.b64decode(data)
@@ -402,4 +461,10 @@ async def send_message_endpoint(user_id: int, request: Request):
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
+
+    if langfuse.auth_check():
+        print("Langfuse client is authenticated and ready!")
+    else:
+        print("Authentication failed. Please check your credentials and host.")
+
     uvicorn.run(app, host="0.0.0.0", port=port)
