@@ -35,20 +35,14 @@ Additionally, create a multi-output device. This way you can hear the conversati
 
 ## Launch
 
-Enable and activate virtual environment with venv:
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
-
 Install python dependencies if not already:
 ```bash
-pip install -r requirements.txt
+uv sync
 ```
 
 Launch web ui:
 ```bash
-uvicorn main:app --port 8000
+uv run uvicorn main:app --port 8000
 ```
 
 The app should be available on http://127.0.0.1:8000.
@@ -57,7 +51,7 @@ The app should be available on http://127.0.0.1:8000.
 
 ### Agent
 ```bash
-uvicorn main:app --port 8000
+uv run uvicorn main:app --port 8000
 ```
 This will launch web ui at http://127.0.0.1:8000.
 In web ui, choose regular mic and speakers in device dropdowns. Click "Start audio" to launch agent live.
@@ -69,8 +63,8 @@ You'll need to launch two agents on two ports, pipe their audio, and launch agen
 
 1. Launch two agents on port 8000 and 8001:
 ```bash
-AGENT_NAME=alice uvicorn main:app --port 8000
-AGENT_NAME=bastian uvicorn main:app --port 8001
+AGENT_NAME=alice uv run uvicorn main:app --port 8000
+AGENT_NAME=bastian uv run uvicorn main:app --port 8001
 ```
 2. In agent a (alice) web ui at http://127.0.0.1:8000, select `AB` for mic and `BA` for speakers.
 3. Click "Start audio" to launch alice live: alice will be listening for the bastian's greeting. 
@@ -89,8 +83,8 @@ You'll need to launch both agents, pipe their inputs and outputs into 4 virtual 
 Here is how you do it step-by-step:
 1. Launch two agents on port 8000 and 8001:
 ```bash
-AGENT_NAME=alice uvicorn main:app --port 8000
-AGENT_NAME=bastian uvicorn main:app --port 8001
+AGENT_NAME=alice uv run uvicorn main:app --port 8000
+AGENT_NAME=bastian uv run uvicorn main:app --port 8001
 ```
 2. Create and launch your own google meet, where you'll listen to the agents. Use default regular input and output, e.g. airpods.
 3. In incognito tab or in a different browser, launch the same google meet. Pick `BA` for mic and `AB` for speaker and name yourself "a".
